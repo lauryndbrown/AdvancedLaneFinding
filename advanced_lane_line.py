@@ -8,11 +8,11 @@ import numpy as np
 # Color/gradient threshold
 # Perspective transform
 NUM_COLOR_CHANNELS = 3
-CORNERS_PATH = 'output_images/corners/corners%s.jpg'
-ORIGINAL_PATH = 'output_images/original/original%s.jpg'
-UNDISTORTED_IMAGES_PATH = 'output_images/undistorted_images/undist%d.jpg'
+CORNERS_PATH = 'output_images/corners/corners%d.jpg'
+ORIGINAL_PATH = 'output_images/original/original%d.jpg'
+UNDISTORTED_PATH = 'output_images/undistorted/undistorted%d.jpg'
 CALIBRATION_PATH = 'output_images/calibrations.p'
-class Camera:
+class CameraCalibrator:
     def __init__(self, nx, ny):
         self.nx = nx
         self.ny = ny
@@ -22,17 +22,19 @@ class Camera:
     def distortion_correction(self, glob_path):
         images = [cv2.imread(path) for path in glob.glob(glob_path)]
         object_points, image_points = self.get_points(images)
+        undist_images = []
 
-        for index, img in enumerate(images):
+        for img in self.output_images[ORIGINAL_PATH]:
             undist = self.undistort_image(img, object_points, image_points)
+            undist_images.append(undist)
+        self.output_images[UNDISTORTED_PATH] = undist_images
             
-
     def undistort_image(self, img, objpoints, imgpoints):
         # Function that takes an image, object points, and image points
         # performs the camera calibration, image distortion correction and 
         # returns the undistorted image
-        img_size = (img.shape[1], img.shape[0])
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, None, None)
+        #img_size = (img.shape[1], img.shape[0])
+        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img.shape[0:2], None, None)
         undist = cv2.undistort(img, mtx, dist, None, mtx)
         self.save_calibration(mtx, dist)
         return undist
@@ -43,7 +45,7 @@ class Camera:
     def save_images(self):
         for path, images in self.output_images.items():
             for index, image in enumerate(images):
-                cv2.imwrite(path % str(index+1), image)
+                cv2.imwrite(path % (index+1), image)
 
     def pickle_calibrations(self):
         pickle.dump( self.dist_pickle, open( CALIBRATION_PATH, 'wb' ) )
@@ -99,7 +101,7 @@ class Camera:
         cv2.cvtColor(img, conversion)
 
 if __name__=='__main__':
-    camera = Camera(9, 6)
+    camera = CameraCalibrator(9, 6)
     camera.distortion_correction('camera_cal/calibration*.jpg')
     camera.on_end()
     print('Done')
