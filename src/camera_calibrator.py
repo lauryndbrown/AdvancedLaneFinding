@@ -1,33 +1,36 @@
+from __future__ import absolute_import
 import cv2
 import glob
-import pickle
+
 import numpy as np
 
-# Camera calibration
-# Distortion correction
-# Color/gradient threshold
-# Perspective transform
+from .output_saver import OutputSaver
+
 NUM_COLOR_CHANNELS = 3
 CORNERS_PATH = 'output_images/corners/corners%d.jpg'
 ORIGINAL_PATH = 'output_images/original/original%d.jpg'
 UNDISTORTED_PATH = 'output_images/undistorted/undistorted%d.jpg'
-CALIBRATION_PATH = 'output_images/calibrations.p'
+WARPED_PATH = 'output_images/warped/warped%d.jpg'
+
 class CameraCalibrator:
     def __init__(self, nx, ny):
         self.nx = nx
         self.ny = ny
-        self.dist_pickle = []
-        self.output_images = {}
+        self.output_saver = OutputSaver()
         
     def distortion_correction(self, glob_path):
         images = [cv2.imread(path) for path in glob.glob(glob_path)]
         object_points, image_points = self.get_points(images)
         undist_images = []
+        warped_images = []
 
-        for img in self.output_images[ORIGINAL_PATH]:
+        for index, img in enumerate(self.output_saver.images[ORIGINAL_PATH]):
             undist = self.undistort_image(img, object_points, image_points)
             undist_images.append(undist)
-        self.output_images[UNDISTORTED_PATH] = undist_images
+            warped, M = self.perspective_transform(undist, image_points[index])
+            warped_images.append(warped)
+        self.output_saver.images[UNDISTORTED_PATH] = undist_images
+        self.output_saver.images[WARPED_PATH] = warped_images
             
     def undistort_image(self, img, objpoints, imgpoints):
         # Function that takes an image, object points, and image points
@@ -36,23 +39,10 @@ class CameraCalibrator:
         #img_size = (img.shape[1], img.shape[0])
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img.shape[0:2], None, None)
         undist = cv2.undistort(img, mtx, dist, None, mtx)
-        self.save_calibration(mtx, dist)
+        self.output_saver.save_calibration(mtx, dist)
         return undist
 
-    def save_calibration(self, mtx, dist):
-        self.dist_pickle = {'mtx':mtx, 'dist':dist}
-
-    def save_images(self):
-        for path, images in self.output_images.items():
-            for index, image in enumerate(images):
-                cv2.imwrite(path % (index+1), image)
-
-    def pickle_calibrations(self):
-        pickle.dump( self.dist_pickle, open( CALIBRATION_PATH, 'wb' ) )
-
-    def on_end(self):
-        self.pickle_calibrations()
-        self.save_images()
+    
 
     def get_points(self, images):
         object_points = [] 
@@ -69,8 +59,8 @@ class CameraCalibrator:
                 object_points.append(objp)
                 output_images.append(img_corners)
                 original_images.append(img)
-        self.output_images[CORNERS_PATH] = output_images
-        self.output_images[ORIGINAL_PATH] = original_images
+        self.output_saver.images[CORNERS_PATH] = output_images
+        self.output_saver.images[ORIGINAL_PATH] = original_images
         print('Number of Images with corners found: ' + str(len(output_images)))
         return np.array(object_points), np.array(image_points)
 
@@ -81,27 +71,31 @@ class CameraCalibrator:
         object_points[:,:2] = np.mgrid[0:self.nx, 0:self.ny].T.reshape(-1,2)
         return object_points
 
-    def draw_corners(self, index, img, ret, corners): 
-        # If found, draw corners
-        img = np.copy(img)
-        if ret == True:
-            cv2.drawChessboardCorners(img, (self.nx, self.ny), corners, ret)
-            cv2.imwrite(CORNERS_PATH % index, img)
-        
-            
-    def gradient_threshold(self):
-        pass
-    def perspective_transform(self):
-        pass
-    
-    def convert_to_greyscale(self, img, conversion=cv2.COLOR_BGR2GRAY):
-        #Note: Make sure you use the correct grayscale conversion depending on how you've read in your images. 
-        # Use cv2.COLOR_RGB2GRAY if you've read in an image using mpimg.imread(). 
-        # Use cv2.COLOR_BGR2GRAY if you've read in an image using cv2.imread().
-        cv2.cvtColor(img, conversion)
+    # Define a function that takes an image, number of x and y points, 
+    # camera matrix and distortion coefficients
+    def perspective_transform(self, undist, corners):
+        # Convert undistorted image to grayscale
+        gray = cv2.cvtColor(undist, cv2.COLOR_BGR2GRAY)
 
-if __name__=='__main__':
-    camera = CameraCalibrator(9, 6)
-    camera.distortion_correction('camera_cal/calibration*.jpg')
-    camera.on_end()
-    print('Done')
+        # Choose offset from image corners to plot detected corners
+        # This should be chosen to present the result at the proper aspect ratio
+        # My choice of 100 pixels is not exact, but close enough for our purpose here
+        offset = 100 # offset for dst points
+        # Grab the image shape
+        img_size = (gray.shape[1], gray.shape[0])
+
+        # For source points I'm grabbing the outer four detected corners
+        src = np.float32([corners[0], corners[self.nx-1], corners[-1], corners[-self.nx]])
+        # For destination points, I'm arbitrarily choosing some points to be
+        # a nice fit for displaying our warped result 
+        # again, not exact, but close enough for our purposes
+        dst = np.float32([[offset, offset], [img_size[0]-offset, offset], 
+                                    [img_size[0]-offset, img_size[1]-offset], 
+                                    [offset, img_size[1]-offset]])
+        # Given src and dst points, calculate the perspective transform matrix
+        M = cv2.getPerspectiveTransform(src, dst)
+        # Warp the image using OpenCV warpPerspective()
+        warped = cv2.warpPerspective(undist, M, img_size)
+
+        # Return the resulting image and matrix
+        return warped, M
