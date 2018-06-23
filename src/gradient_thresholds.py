@@ -4,6 +4,7 @@ import glob
 import pickle
 import numpy as np
 
+
 MAX_COLOR_VALUE = 255
 
 
@@ -34,15 +35,14 @@ class GradientThreshold:
         combined_binary = np.zeros_like(binary2)
         combined_binary[(binary1 == 1) | (binary2 == 1)] = 1
         return combined_binary
-
-    def plot_threshold_images(self, color_binary, combined_binary):
-        # Plotting thresholded images
-        f, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
-        ax1.set_title('Stacked thresholds')
-        ax1.imshow(color_binary)
-
-        ax2.set_title('Combined S channel and gradient thresholds')
-        ax2.imshow(combined_binary, cmap='gray')
+    
+    # Define a function that thresholds the S-channel of HLS
+    def hls_select(self, img, thresh=(0, 255)):
+        hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
+        s_channel = hls[:,:,2]
+        binary_output = np.zeros_like(s_channel)
+        binary_output[(s_channel > thresh[0]) & (s_channel <= thresh[1])] = 1
+        return binary_output
 
     def gradient_threshold(self, img):
         # Convert to HLS color space and separate the S channel
@@ -51,7 +51,7 @@ class GradientThreshold:
         s_channel = hls[:,:,2]
 
         sxbinary = self.abs_sobel_thresh(img, thresh_min=20, thresh_max=100)
-        s_binary = self.apply_threshold(thresh_min=170, thresh_max=255, s_channel)
+        s_binary = self.apply_threshold(thresh_min=170, thresh_max=255, channel=s_channel)
 
         # Stack each channel to view their individual contributions in green and blue respectively
         # This returns a stack of the two binary images, whose components you can see as different colors
@@ -59,5 +59,6 @@ class GradientThreshold:
         combined_binary = self.combine_binary(s_binary, sxbinary)
 
         #self.plot_threshold_images(color_binary, combined_binary)
+        return color_binary, combined_binary
         
         

@@ -2,11 +2,12 @@ from __future__ import absolute_import
 import glob
 from .gradient_thresholds import GradientThreshold
 from .camera_calibrator import CameraCalibrator
+#from .ouput_saver import OutputSaver
 
 # Camera calibration, Distortion correction, Perspective transform
 camera = CameraCalibrator(9, 6)
 camera.distortion_correction('camera_cal/calibration*.jpg')
-camera.on_end()
+camera.output_saver.on_end()
 
 # Color/gradient threshold
 thresh = GradientThreshold()

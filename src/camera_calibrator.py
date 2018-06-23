@@ -1,22 +1,23 @@
-from __future__ import absolute_import
+#from __future__ import absolute_import
 import cv2
 import glob
 
 import numpy as np
 
-from .output_saver import OutputSaver
+from output_saver import OutputSaver
 
 NUM_COLOR_CHANNELS = 3
-CORNERS_PATH = 'output_images/corners/corners%d.jpg'
-ORIGINAL_PATH = 'output_images/original/original%d.jpg'
-UNDISTORTED_PATH = 'output_images/undistorted/undistorted%d.jpg'
-WARPED_PATH = 'output_images/warped/warped%d.jpg'
+CORNERS_PATH = '../output_images/corners/corners%d.jpg'
+ORIGINAL_PATH = '../output_images/original/original%d.jpg'
+UNDISTORTED_PATH = '../output_images/undistorted/undistorted%d.jpg'
+WARPED_PATH = '../output_images/warped/warped%d.jpg'
 
 class CameraCalibrator:
-    def __init__(self, nx, ny):
+    def __init__(self, nx, ny, output_saver=None):
         self.nx = nx
         self.ny = ny
-        self.output_saver = OutputSaver()
+        self.output_saver = OutputSaver() if output_saver is None else output_saver
+        
         
     def distortion_correction(self, glob_path):
         images = [cv2.imread(path) for path in glob.glob(glob_path)]
@@ -39,7 +40,7 @@ class CameraCalibrator:
         #img_size = (img.shape[1], img.shape[0])
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img.shape[0:2], None, None)
         undist = cv2.undistort(img, mtx, dist, None, mtx)
-        self.output_saver.save_calibration(mtx, dist)
+        self.output_saver.add_calibration(mtx, dist)
         return undist
 
     
